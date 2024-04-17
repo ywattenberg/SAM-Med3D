@@ -12,6 +12,7 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 import torchio as tio
+from torch.utils.data import RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from segment_anything.build_sam3D import sam_model_registry3D
 import argparse
@@ -48,8 +49,8 @@ parser.add_argument('--step_size', type=list, default=[120, 180])
 parser.add_argument('--gamma', type=float, default=0.1)
 parser.add_argument('--num_epochs', type=int, default=200)
 parser.add_argument('--img_size', type=int, default=128)
-parser.add_argument('--batch_size', type=int, default=12)
-parser.add_argument('--accumulation_steps', type=int, default=20)
+parser.add_argument('--batch_size', type=int, default=2)
+parser.add_argument('--accumulation_steps', type=int, default=1)
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--weight_decay', type=float, default=0.1)
 parser.add_argument('--port', type=int, default=12361)
@@ -87,7 +88,7 @@ def get_dataloaders(args):
         train_sampler = DistributedSampler(train_dataset)
         shuffle = False
     else:
-        train_sampler = None
+        train_sampler = None # RandomSampler(train_dataset, replacement=True, num_samples=20)
         shuffle = True
 
     train_dataloader = Union_Dataloader(
@@ -259,14 +260,9 @@ class BaseTrainer:
             mask_threshold = 0.5
 
             mask_pred = (mask_pred > mask_threshold)
-            mask_gt = (mask_gt > 0)
-            print(f"# 1's in pred mask {mask_pred.sum()} vs gt {mask_gt.sum()}")
-
-
-            
+            mask_gt = (mask_gt > 0)            
             volume_sum = mask_gt.sum() + mask_pred.sum()
             if volume_sum == 0:
-                print(f"Vol sum is 0")
                 return np.NaN
             volume_intersect = (mask_gt & mask_pred).sum()
             return 2*volume_intersect / volume_sum
@@ -298,7 +294,7 @@ class BaseTrainer:
         self.optimizer.zero_grad()
         step_loss = 0
         for step, (image3D, gt3D) in enumerate(tbar):
-
+            
             my_context = self.model.no_sync if self.args.rank != -1 and step % self.args.accumulation_steps != 0 else nullcontext
 
             with my_context():
@@ -326,8 +322,7 @@ class BaseTrainer:
                 
                 self.scaler.scale(loss).backward()    
 
-            if step % self.args.accumulation_steps == 0 and step != 0:
-                print(f"step: {step}")
+            if step % self.args.accumulation_steps == 0 and (step != 0 or self.args.accumulation_steps == 1):
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
@@ -340,7 +335,7 @@ class BaseTrainer:
                 step_loss += cur_loss
 
             if not self.args.multi_gpu or (self.args.multi_gpu and self.args.rank == 0):
-                if step % self.args.accumulation_steps == 0 and step != 0:
+                if step % self.args.accumulation_steps == 0 and (step != 0 or self.args.accumulation_steps == 1):
                     print(f'Epoch: {epoch}, Step: {step}, Loss: {print_loss}, Dice: {print_dice}')
                     if print_dice > self.step_best_dice:
                         self.step_best_dice = print_dice
