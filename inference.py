@@ -442,7 +442,7 @@ if __name__ == "__main__":
         modality = osp.basename(osp.dirname(osp.dirname(osp.dirname(img_name))))
         dataset = osp.basename(osp.dirname(osp.dirname(img_name)))
         vis_root = osp.join(args.pred_output_dir, modality, dataset)
-        pred_path = osp.join(vis_root, osp.basename(img_name).replace(".nii.gz", f"_pred{args.num_clicks-1}.nii.gz"))
+        pred_path = osp.join(vis_root, osp.basename(img_name).replace(".nii", f"_pred{args.num_clicks-1}.nii"))
         
         ''' inference '''
         iou_list, dice_list = [], []

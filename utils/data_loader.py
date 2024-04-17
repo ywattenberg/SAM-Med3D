@@ -98,8 +98,8 @@ class Dataset_Union_ALL(Dataset):
             d = os.path.join(path, f'labels{self.data_type}')
             if os.path.exists(d):
                 for name in os.listdir(d):
-                    base = os.path.basename(name).split('.nii.gz')[0]
-                    label_path = os.path.join(path, f'labels{self.data_type}', f'{base}.nii.gz')
+                    base = os.path.basename(name).split('.nii')[0]
+                    label_path = os.path.join(path, f'labels{self.data_type}', f'{base}.nii')
                     self.image_paths.append(label_path.replace('labels', 'images'))
                     self.label_paths.append(label_path)
 
@@ -114,8 +114,8 @@ class Dataset_Union_ALL_Val(Dataset_Union_ALL):
                 d = os.path.join(path, f'labels{dt}')
                 if os.path.exists(d):
                     for name in os.listdir(d):
-                        base = os.path.basename(name).split('.nii.gz')[0]
-                        label_path = os.path.join(path, f'labels{dt}', f'{base}.nii.gz') 
+                        base = os.path.basename(name).split('.nii')[0]
+                        label_path = os.path.join(path, f'labels{dt}', f'{base}.nii') 
                         self.image_paths.append(label_path.replace('labels', 'images'))
                         self.label_paths.append(label_path)
         self.image_paths = self.image_paths[self.split_idx::self.split_num]

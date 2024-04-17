@@ -50,7 +50,7 @@ parser.add_argument('--num_epochs', type=int, default=200)
 parser.add_argument('--img_size', type=int, default=128)
 parser.add_argument('--batch_size', type=int, default=12)
 parser.add_argument('--accumulation_steps', type=int, default=20)
-parser.add_argument('--lr', type=float, default=8e-4)
+parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--weight_decay', type=float, default=0.1)
 parser.add_argument('--port', type=int, default=12361)
 
@@ -80,6 +80,8 @@ def get_dataloaders(args):
         tio.RandomFlip(axes=(0, 1, 2)),
     ]),
     threshold=1000)
+    print(f"Length of dataset {len(train_dataset)}")
+    print(f"data paths {train_dataset.image_paths}")
 
     if args.multi_gpu:
         train_sampler = DistributedSampler(train_dataset)
@@ -258,9 +260,13 @@ class BaseTrainer:
 
             mask_pred = (mask_pred > mask_threshold)
             mask_gt = (mask_gt > 0)
+            print(f"# 1's in pred mask {mask_pred.sum()} vs gt {mask_gt.sum()}")
+
+
             
             volume_sum = mask_gt.sum() + mask_pred.sum()
             if volume_sum == 0:
+                print(f"Vol sum is 0")
                 return np.NaN
             volume_intersect = (mask_gt & mask_pred).sum()
             return 2*volume_intersect / volume_sum
@@ -321,6 +327,7 @@ class BaseTrainer:
                 self.scaler.scale(loss).backward()    
 
             if step % self.args.accumulation_steps == 0 and step != 0:
+                print(f"step: {step}")
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
@@ -328,6 +335,7 @@ class BaseTrainer:
                 print_loss = step_loss / self.args.accumulation_steps
                 step_loss = 0
                 print_dice = self.get_dice_score(prev_masks, gt3D)
+                epoch_dice += print_dice
             else:
                 step_loss += cur_loss
 
@@ -344,9 +352,8 @@ class BaseTrainer:
                             )
                     if print_loss < self.step_best_loss:
                         self.step_best_loss = print_loss
-            
-        epoch_loss /= step
-
+        epoch_loss /= step +1
+        epoch_dice /= step +1
         return epoch_loss, epoch_iou, epoch_dice, pred_list
 
     def eval_epoch(self, epoch, num_clicks):
